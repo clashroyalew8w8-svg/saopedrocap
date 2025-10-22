@@ -1,6 +1,6 @@
-import axios from "axios";
+const axios = require("axios");
 
-export default async function handler(req, res) {
+module.exports = async (req, res) => {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Método não permitido" });
     return;
@@ -32,7 +32,7 @@ export default async function handler(req, res) {
     );
 
     const data = resposta.data;
-    res.json({
+    res.status(200).json({
       id: data.id,
       status: data.status,
       qr_text: data.point_of_interaction.transaction_data.qr_code,
@@ -42,4 +42,4 @@ export default async function handler(req, res) {
     console.error(error.response?.data || error.message);
     res.status(500).json({ error: "Erro ao criar PIX" });
   }
-}
+};
