@@ -86,7 +86,6 @@
   </div>
 
   <script>
-    const ACCESS_TOKEN = "APP_USR-5763051175665115-102112-a7b6a29d4c87f1d1f254b999401581fa-2265178340";
     const WHATSAPP = "5519978213042";
     let selectedNumbers = [];
     let paymentId = null;
@@ -106,7 +105,6 @@
     const ticketNumbers = document.getElementById("ticket-numbers");
     const downloadBtn = document.getElementById("download-btn");
 
-    // Geração dos números
     for (let i = 1; i <= 20; i++) {
       const el = document.createElement("div");
       el.className = "number";
@@ -140,7 +138,6 @@
       updateDisplay();
     };
 
-    // Gerar PIX via Mercado Pago
     betBtn.onclick = async () => {
       if (selectedNumbers.length !== 6) return alert("Escolha 6 números!");
       const code = genCode();
@@ -149,50 +146,58 @@
       statusEl.textContent = "Gerando PIX...";
 
       try {
-        const res = await fetch("https://api.mercadopago.com/v1/payments", {
-          method: "POST",
-          headers: { "Authorization": "Bearer " + ACCESS_TOKEN, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            transaction_amount: 2.00,
-            description: "Aposta SÃO PEDRO CAP",
-            payment_method_id: "pix",
-            payer: { email: "apostador@spcap.com", first_name: "Apostador", last_name: "SPCAP" }
-          })
+        const res = await fetch("/api/criar-pix", { 
+          method: "POST", 
+          headers: { "Content-Type": "application/json" } 
         });
+        
+        if (!res.ok) {
+          throw new Error(`Erro ${res.status}: ${await res.text()}`);
+        }
+        
         const data = await res.json();
         paymentId = data.id;
-        const qr = data.point_of_interaction.transaction_data.qr_code;
+        const qr = data.point_of_interaction?.transaction_data?.qr_code || data.qr_code;
+        
+        if (!qr) {
+          throw new Error("QR Code não encontrado na resposta");
+        }
+        
         QRCode.toCanvas(qrDiv, qr);
         pixCode.textContent = qr;
         statusEl.textContent = "Aguardando pagamento...";
         checkPayment(code);
       } catch (e) {
-        alert("Erro ao criar PIX. Tente novamente.");
+        console.error("Erro ao criar PIX:", e);
+        alert("Erro ao criar PIX: " + e.message);
+        statusEl.textContent = "Erro ao gerar PIX";
       }
     };
 
-    // Gerar código aleatório
     function genCode() {
       const c = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
       return Array.from({ length: 10 }, () => c[Math.floor(Math.random() * c.length)]).join("");
     }
 
-    // Verificar pagamento aprovado
     async function checkPayment(code) {
       const interval = setInterval(async () => {
-        const res = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-          headers: { "Authorization": "Bearer " + ACCESS_TOKEN }
-        });
-        const data = await res.json();
-        if (data.status === "approved") {
-          clearInterval(interval);
-          statusEl.textContent = "Pagamento aprovado ✅";
-          gerarBilhete(code);
+        try {
+          const res = await fetch(`/api/verificar-pix/${paymentId}`);
+          if (!res.ok) {
+            throw new Error(`Erro ${res.status}`);
+          }
+          const data = await res.json();
+          if (data.status === "approved") {
+            clearInterval(interval);
+            statusEl.textContent = "Pagamento aprovado ✅";
+            gerarBilhete(code);
+          }
+        } catch (e) {
+          console.error("Erro ao verificar pagamento:", e);
         }
       }, 4000);
     }
 
-    // Gerar bilhete
     function gerarBilhete(code) {
       const date = new Date().toLocaleString("pt-BR");
       ticketCode.textContent = code;
@@ -209,13 +214,11 @@
       enviarWhatsApp(code);
     }
 
-    // Enviar confirmação no WhatsApp
     function enviarWhatsApp(code) {
       const msg = `🎫 *SÃO PEDRO CAP*%0A%0ABilhete confirmado!%0A%0ACódigo: ${code}%0AValor: R$2,00%0ANúmeros: ${selectedNumbers.join(", ")}%0A%0ABoa sorte! 🍀`;
       window.open(`https://wa.me/${WHATSAPP}?text=${msg}`, "_blank");
     }
 
-    // Baixar bilhete em PDF
     downloadBtn.onclick = () => {
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
